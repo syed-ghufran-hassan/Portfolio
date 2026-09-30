@@ -457,8 +457,6 @@
 <script>
 /* =========================================================
    PROJECTS — edit this array only.
-   Every link MUST be a full external URL (https://...).
-   type:  "demo" | "repo" | "case" | "post"
    ========================================================= */
 const PROJECTS = [
   {
@@ -498,7 +496,7 @@ const PROJECTS = [
   }
 ];
 
-/* ---------- render project cards into the slider ---------- */
+/* ---------- render project cards ---------- */
 (function renderProjects() {
   const slider = document.getElementById("projects-slider");
   if (!slider) return;
@@ -509,7 +507,7 @@ const PROJECTS = [
 
   PROJECTS.forEach((p, i) => {
     const card = document.createElement("a");
-    card.className = "project-card is-external";
+    card.className = "project-card";
     card.href = p.link;
     card.target = "_blank";
     card.rel = "noopener noreferrer";
@@ -528,9 +526,7 @@ const PROJECTS = [
 })();
 
 /* =========================================================
-   Reusable slider initialiser
-   Handles: arrow buttons, drag-to-scroll, wheel-to-scroll,
-            keyboard arrows, arrow enable/disable.
+   Slider init — click-safe drag
    ========================================================= */
 function initSlider({ sliderId, prevId, nextId }) {
   const slider = document.getElementById(sliderId);
@@ -550,29 +546,58 @@ function initSlider({ sliderId, prevId, nextId }) {
   }
   slider.addEventListener('scroll', updateArrows, { passive: true });
   window.addEventListener('resize', updateArrows);
-  window.addEventListener('load', updateArrows);
   requestAnimationFrame(updateArrows);
 
-  /* --- drag with mouse --- */
-  let dragging = false, startX = 0, startScroll = 0;
+  /* ---- drag (only starts after 8px of horizontal movement) ---- */
+  let isDown = false, isDragging = false, suppressClick = false;
+  let downX = 0, downY = 0, startScroll = 0;
+
   slider.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
-    dragging = true; startX = e.clientX; startScroll = slider.scrollLeft;
-    slider.classList.add('dragging'); slider.setPointerCapture(e.pointerId);
+    isDown = true;
+    isDragging = false;
+    suppressClick = false;
+    downX = e.clientX;
+    downY = e.clientY;
+    startScroll = slider.scrollLeft;
   });
-  slider.addEventListener('pointermove', (e) => {
-    if (!dragging) return; e.preventDefault();
-    slider.scrollLeft = startScroll - (e.clientX - startX);
-  });
-  function endDrag(e) {
-    if (!dragging) return; dragging = false; slider.classList.remove('dragging');
-    if (e && e.pointerId != null && slider.hasPointerCapture(e.pointerId)) slider.releasePointerCapture(e.pointerId);
-  }
-  slider.addEventListener('pointerup', endDrag);
-  slider.addEventListener('pointercancel', endDrag);
-  slider.addEventListener('pointerleave', endDrag);
 
-  /* --- vertical wheel → horizontal scroll --- */
+  window.addEventListener('pointermove', (e) => {
+    if (!isDown) return;
+    const dx = e.clientX - downX;
+    const dy = e.clientY - downY;
+
+    if (!isDragging) {
+      // must move mostly horizontally, and past the threshold
+      if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return;
+      isDragging = true;
+      suppressClick = true;
+      slider.classList.add('dragging');
+    }
+    e.preventDefault();
+    slider.scrollLeft = startScroll - dx;
+  });
+
+  function endDrag() {
+    if (!isDown) return;
+    isDown = false;
+    isDragging = false;
+    slider.classList.remove('dragging');
+  }
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+
+  // Only kill the click if a real drag just happened.
+  // Capture phase → runs before the <a> default action.
+  slider.addEventListener('click', (e) => {
+    if (suppressClick) {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressClick = false;
+    }
+  }, true);
+
+  /* ---- vertical wheel → horizontal scroll ---- */
   slider.addEventListener('wheel', (e) => {
     if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
     const max = slider.scrollWidth - slider.clientWidth;
@@ -580,14 +605,13 @@ function initSlider({ sliderId, prevId, nextId }) {
     if (canGo) { e.preventDefault(); slider.scrollLeft += e.deltaY; }
   }, { passive: false });
 
-  /* --- keyboard --- */
+  /* ---- keyboard ---- */
   slider.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowRight') { e.preventDefault(); slider.scrollBy({ left:  step(), behavior: 'smooth' }); }
     if (e.key === 'ArrowLeft')  { e.preventDefault(); slider.scrollBy({ left: -step(), behavior: 'smooth' }); }
   });
 }
 
-/* ---- wire up both sliders ---- */
 initSlider({ sliderId: 'tech-slider',     prevId: 'tech-prev',     nextId: 'tech-next' });
 initSlider({ sliderId: 'projects-slider', prevId: 'projects-prev', nextId: 'projects-next' });
 </script>
